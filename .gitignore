@@ -1,0 +1,50 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment variables & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+*.session
+*.session-journal
+cookies.txt
+
+# Database & SQLite files
+*.db
+*.sqlite
+*.sqlite3
+elitemusic.db
+cloned_bots.json
+channel_dashboard_state.json
+
+# Virtual environments & Node modules
+venv/
+.venv/
+env/
+ENV/
+node_modules/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs, archives & Temporary files
+logs/
+*.log
+downloads/
+temp/
+.cache/
+.DS_Store
+update.tar.gz
+
+# Scratch & Planning files
+plan.txt
+client.py
+clone_manager.py
+resolver.py
