@@ -94,3 +94,18 @@ async def health_check():
 
 # Include V1 API
 app.include_router(v1_router)
+
+
+from fastapi.staticfiles import StaticFiles
+import os
+
+# Serve Telegram Mini App (TMA) Web Client
+tma_paths = [
+    "/home/ubuntu/elitemusicapi/tma/dist",
+    "/Users/mac/Desktop/mybots/elitemusicapi/tma/dist",
+    os.path.join(os.getcwd(), "tma", "dist"),
+]
+for p in tma_paths:
+    if os.path.exists(p):
+        app.mount("/tma", StaticFiles(directory=p, html=True), name="tma")
+        break
