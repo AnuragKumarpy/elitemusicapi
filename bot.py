@@ -768,7 +768,7 @@ async def handle_play(message: Message):
         asyncio.create_task(auto_delete(status_msg, delay=10))
 
 
-@dp.message(F.text.regexp(r"^/pause(?:@\w+)?", flags=re.IGNORECASE))
+@dp.message(F.text.regexp(r"^[!/.?]?(?:pause|cpause)(?:@\w+)?", flags=re.IGNORECASE))
 async def handle_pause_cmd(message: Message):
     try:
         await music_client.pause(message.chat.id)
@@ -782,7 +782,7 @@ async def handle_pause_cmd(message: Message):
         asyncio.create_task(auto_delete(msg, delay=8))
 
 
-@dp.message(F.text.regexp(r"^/resume(?:@\w+)?", flags=re.IGNORECASE))
+@dp.message(F.text.regexp(r"^[!/.?]?(?:resume|cresume)(?:@\w+)?", flags=re.IGNORECASE))
 async def handle_resume_cmd(message: Message):
     try:
         await music_client.resume(message.chat.id)
@@ -796,7 +796,7 @@ async def handle_resume_cmd(message: Message):
         asyncio.create_task(auto_delete(msg, delay=8))
 
 
-@dp.message(F.text.regexp(r"^/skip(?:@\w+)?", flags=re.IGNORECASE))
+@dp.message(F.text.regexp(r"^[!/.?]?(?:skip|cskip|next)(?:@\w+)?", flags=re.IGNORECASE))
 async def handle_skip_cmd(message: Message):
     try:
         res = await music_client.skip(message.chat.id)
@@ -821,7 +821,7 @@ async def handle_skip_cmd(message: Message):
         asyncio.create_task(auto_delete(msg, delay=8))
 
 
-@dp.message(F.text.regexp(r"^/stop(?:@\w+)?", flags=re.IGNORECASE))
+@dp.message(F.text.regexp(r"^[!/.?]?(?:stop|cstop|end)(?:@\w+)?", flags=re.IGNORECASE))
 async def handle_stop_cmd(message: Message):
     try:
         await music_client.stop(message.chat.id)
@@ -884,6 +884,115 @@ async def handle_8d_cmd(message: Message):
             msg = await message.reply(f"{E_HEADPHONES} <b>8D Spatial Audio enabled!</b>\n⚡ <i>Effect armed for upcoming & queued songs.</i>\n\n{POWERED_BY_FOOTER}", parse_mode="HTML")
         else:
             msg = await message.reply(f"{E_CHECK} <b>8D Spatial Audio disabled.</b>\n\n{POWERED_BY_FOOTER}", parse_mode="HTML")
+        asyncio.create_task(auto_delete(msg, delay=8))
+        asyncio.create_task(auto_delete(message, delay=8))
+    except Exception as e:
+        msg = await message.reply(f"{E_CROSS} Error: {html.escape(str(e))}\n\n{POWERED_BY_FOOTER}", parse_mode="HTML")
+        asyncio.create_task(auto_delete(msg, delay=8))
+
+
+
+@dp.message(F.text.regexp(r"^[!/.?]?(?:queue|q|cqueue)(?:@\w+)?", flags=re.IGNORECASE))
+async def handle_queue_cmd(message: Message):
+    try:
+        state = await music_client.get_room_state(message.chat.id)
+        if not state or not state.current_track:
+            msg = await message.reply(f"ℹ️ <b>No active playback session in this group.</b>\n\n{POWERED_BY_FOOTER}", parse_mode="HTML")
+            asyncio.create_task(auto_delete(msg, delay=8))
+            return
+
+        cur = state.current_track
+        dur_m = cur.duration_seconds // 60
+        dur_s = cur.duration_seconds % 60
+        queue_text = f"🎧 <b>ACTIVE PLAYBACK & QUEUE</b>\n\n"
+        queue_text += f"🎵 <b>Now Playing:</b> <b>{html.escape(cur.title)}</b> — <i>{html.escape(cur.artist)}</i> (<code>{dur_m:02d}:{dur_s:02d}</code>)\n"
+        queue_text += f"📊 <b>Status:</b> <code>{state.status}</code> | 🔊 <b>Listeners:</b> <code>{state.connected_listeners}</code>\n\n"
+
+        if state.queue:
+            queue_text += f"📜 <b>Upcoming Tracks ({len(state.queue)}):</b>\n"
+            for i, trk in enumerate(state.queue[:10], start=1):
+                tm = trk.duration_seconds // 60
+                ts = trk.duration_seconds % 60
+                queue_text += f"<b>{i}.</b> {html.escape(trk.title[:30])} — <i>{html.escape(trk.artist[:20])}</i> [<code>{tm:02d}:{ts:02d}</code>]\n"
+            if len(state.queue) > 10:
+                queue_text += f"<i>...and {len(state.queue) - 10} more in queue.</i>\n"
+        else:
+            queue_text += "ℹ️ <i>Queue is currently empty. Use <code>/play <song></code> to add more.</i>\n"
+
+        queue_text += f"\n{POWERED_BY_FOOTER}"
+        msg = await message.reply(queue_text, parse_mode="HTML")
+        asyncio.create_task(auto_delete(msg, delay=20))
+        asyncio.create_task(auto_delete(message, delay=8))
+    except Exception as e:
+        msg = await message.reply(f"{E_CROSS} Error: {html.escape(str(e))}\n\n{POWERED_BY_FOOTER}", parse_mode="HTML")
+        asyncio.create_task(auto_delete(msg, delay=8))
+
+
+@dp.message(F.text.regexp(r"^[!/.?]?(?:np|nowplaying|cnowplaying)(?:@\w+)?", flags=re.IGNORECASE))
+async def handle_np_cmd(message: Message):
+    try:
+        state = await music_client.get_room_state(message.chat.id)
+        if not state or not state.current_track:
+            msg = await message.reply(f"ℹ️ <b>Nothing is currently streaming.</b>\n\n{POWERED_BY_FOOTER}", parse_mode="HTML")
+            asyncio.create_task(auto_delete(msg, delay=8))
+            return
+
+        cur = state.current_track
+        dur_m = cur.duration_seconds // 60
+        dur_s = cur.duration_seconds % 60
+        elapsed_sec = int(state.progress_ms / 1000)
+        el_m = elapsed_sec // 60
+        el_s = elapsed_sec % 60
+
+        text = (
+            f"🎧 <b>NOW STREAMING IN VC</b>\n\n"
+            f"• 🎵 <b>Title:</b> <b>{html.escape(cur.title)}</b>\n"
+            f"• 👤 <b>Artist:</b> <i>{html.escape(cur.artist)}</i>\n"
+            f"• ⏱ <b>Progress:</b> <code>{el_m:02d}:{el_s:02d} / {dur_m:02d}:{dur_s:02d}</code>\n"
+            f"• 📊 <b>Status:</b> <code>{state.status}</code>\n\n"
+            f"{POWERED_BY_FOOTER}"
+        )
+        msg = await message.reply(text, parse_mode="HTML", reply_markup=get_compact_emoji_keyboard(message.chat.id))
+        asyncio.create_task(auto_delete(msg, delay=15))
+        asyncio.create_task(auto_delete(message, delay=8))
+    except Exception as e:
+        msg = await message.reply(f"{E_CROSS} Error: {html.escape(str(e))}\n\n{POWERED_BY_FOOTER}", parse_mode="HTML")
+        asyncio.create_task(auto_delete(msg, delay=8))
+
+
+@dp.message(F.text.regexp(r"^[!/.?]?(?:speed)(?:@\w+)?(?:\s+(.*))?", flags=re.IGNORECASE))
+async def handle_speed_cmd(message: Message):
+    dsp = get_room_dsp(message.chat.id)
+    parts = message.text.split() if message.text else []
+    if len(parts) > 1 and parts[1].replace(".", "", 1).isdigit():
+        spd = max(0.5, min(2.0, float(parts[1])))
+    else:
+        current_spd = dsp.get("speed", 1.0)
+        spd = 1.2 if current_spd == 1.0 else (1.5 if current_spd == 1.2 else 1.0)
+
+    dsp["speed"] = spd
+    try:
+        await music_client.set_dsp(message.chat.id, speed=spd)
+        msg = await message.reply(f"⚡ <b>Playback Speed set to {spd:.1f}x</b>\n\n{POWERED_BY_FOOTER}", parse_mode="HTML")
+        asyncio.create_task(auto_delete(msg, delay=8))
+        asyncio.create_task(auto_delete(message, delay=8))
+    except Exception as e:
+        msg = await message.reply(f"{E_CROSS} Error: {html.escape(str(e))}\n\n{POWERED_BY_FOOTER}", parse_mode="HTML")
+        asyncio.create_task(auto_delete(msg, delay=8))
+
+
+@dp.message(F.text.regexp(r"^[!/.?]?(?:seek)(?:@\w+)?(?:\s+(.*))?", flags=re.IGNORECASE))
+async def handle_seek_cmd(message: Message):
+    parts = message.text.split() if message.text else []
+    if len(parts) <= 1 or not parts[1].isdigit():
+        msg = await message.reply("ℹ️ <b>Usage:</b> <code>/seek &lt;seconds&gt;</code> (e.g. <code>/seek 60</code>)", parse_mode="HTML")
+        asyncio.create_task(auto_delete(msg, delay=8))
+        return
+
+    seek_target_ms = int(parts[1]) * 1000
+    try:
+        await music_client.seek(message.chat.id, target_ms=seek_target_ms)
+        msg = await message.reply(f"⏩ <b>Seeked to {parts[1]}s</b>\n\n{POWERED_BY_FOOTER}", parse_mode="HTML")
         asyncio.create_task(auto_delete(msg, delay=8))
         asyncio.create_task(auto_delete(message, delay=8))
     except Exception as e:
