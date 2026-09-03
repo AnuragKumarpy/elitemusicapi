@@ -73,6 +73,7 @@ class VoiceRoom:
                 )
             else:
                 self.queue.append(track)
+                asyncio.create_task(self._prefetch_queue_streams())
                 return PlaybackResponse(
                     status="QUEUED",
                     room_id=self.chat_id,
@@ -81,6 +82,22 @@ class VoiceRoom:
                     allocated_ram_mb=48.0,
                     message="Track added to room queue"
                 )
+
+    async def _prefetch_queue_streams(self):
+        """Pre-extract upcoming queued tracks in the background for 0ms gapless playback."""
+        try:
+            from app.services.extractor.resolver import media_resolver
+            for track in list(self.queue)[:2]:  # Pre-cache next 2 tracks
+                if not track.stream_url or 'youtube.com' in track.stream_url:
+                    vid_url = f'https://www.youtube.com/watch?v={track.video_id}' if track.video_id else (track.url or '')
+                    if vid_url:
+                        direct_url = await media_resolver._extract_ytdlp_stream(vid_url)
+                        if direct_url:
+                            track.stream_url = direct_url
+                            track.audio_stream_url = direct_url
+                            print(f'[VoiceRoom] ⚡ Pre-cached background stream for: {track.title}')
+        except Exception as e:
+            print(f'[VoiceRoom] Pre-fetch background task notice: {e}')
 
     def _schedule_duration_watcher(self, duration_sec: int):
         if self._duration_task:
@@ -111,6 +128,7 @@ class VoiceRoom:
 
             if self.queue:
                 next_track = self.queue.pop(0)
+                asyncio.create_task(self._prefetch_queue_streams())
                 self.current_track = next_track
                 if not self.assistant:
                     self.assistant = await assistant_pool.acquire_assistant_for_room(self.chat_id)
