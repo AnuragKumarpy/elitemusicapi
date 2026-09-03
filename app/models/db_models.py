@@ -149,3 +149,19 @@ class BroadcastRecord(Base):
     message_snippet = Column(String(255), nullable=True)
     started_at = Column(DateTime, default=get_utc_now, nullable=False)
     completed_at = Column(DateTime, nullable=True)
+
+
+class UserDSPSettings(Base):
+    """
+    Per-User Custom DSP Sound Profile (Bass Boost, 8D Spatial, Nightcore, Tempo).
+    Automatically applied to all songs queued/requested by this user.
+    """
+    __tablename__ = "user_dsp_settings"
+
+    user_id = Column(BigInteger, primary_key=True, index=True)
+    bass_boost_db = Column(Integer, default=0)
+    spatial_8d = Column(Boolean, default=False)
+    nightcore = Column(Boolean, default=False)
+    speed = Column(Integer, default=100) # Stored as integer (100 = 1.0x, 125 = 1.25x)
+    volume = Column(Integer, default=100)
+    updated_at = Column(DateTime, default=get_utc_now, nullable=False)

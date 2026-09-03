@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from sqlalchemy import select, func, distinct
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-from app.models.db_models import Base, BotUser, BotChat, BroadcastRecord
+from app.models.db_models import Base, BotUser, BotChat, BroadcastRecord, UserDSPSettings
 
 DB_URL = "sqlite+aiosqlite:////home/ubuntu/elitemusicapi/elitemusic.db"
 
@@ -174,6 +174,83 @@ class DatabaseService:
                 "total_chats": tot_chats,
                 "bot_breakdown": breakdown
             }
+
+
+
+    async def get_user_dsp(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """Retrieve persistent DSP audio settings configured by this user."""
+        try:
+            async with self.session_factory() as session:
+                query = select(UserDSPSettings).where(UserDSPSettings.user_id == user_id)
+                result = await session.execute(query)
+                row = result.scalars().first()
+                if row:
+                    return {
+                        "bass_boost_db": float(row.bass_boost_db),
+                        "spatial_8d": bool(row.spatial_8d),
+                        "nightcore": bool(row.nightcore),
+                        "speed": float(row.speed) / 100.0 if row.speed else 1.0,
+                        "volume": int(row.volume or 100)
+                    }
+        except Exception as e:
+            print(f"[DB] get_user_dsp error: {e}")
+        return None
+
+    async def set_user_dsp(
+        self,
+        user_id: int,
+        bass_boost_db: Optional[float] = None,
+        spatial_8d: Optional[bool] = None,
+        nightcore: Optional[bool] = None,
+        speed: Optional[float] = None,
+        volume: Optional[int] = None
+    ):
+        """Store or update per-user persistent DSP equalizer preset."""
+        try:
+            async with self.session_factory() as session:
+                async with session.begin():
+                    query = select(UserDSPSettings).where(UserDSPSettings.user_id == user_id)
+                    result = await session.execute(query)
+                    row = result.scalars().first()
+
+                    if row:
+                        if bass_boost_db is not None:
+                            row.bass_boost_db = int(bass_boost_db)
+                        if spatial_8d is not None:
+                            row.spatial_8d = spatial_8d
+                        if nightcore is not None:
+                            row.nightcore = nightcore
+                        if speed is not None:
+                            row.speed = int(speed * 100)
+                        if volume is not None:
+                            row.volume = volume
+                        row.updated_at = get_utc_now()
+                    else:
+                        new_row = UserDSPSettings(
+                            user_id=user_id,
+                            bass_boost_db=int(bass_boost_db) if bass_boost_db is not None else 0,
+                            spatial_8d=spatial_8d if spatial_8d is not None else False,
+                            nightcore=nightcore if nightcore is not None else False,
+                            speed=int(speed * 100) if speed is not None else 100,
+                            volume=volume if volume is not None else 100,
+                            updated_at=get_utc_now()
+                        )
+                        session.add(new_row)
+        except Exception as e:
+            print(f"[DB] set_user_dsp error: {e}")
+
+    async def clear_user_dsp(self, user_id: int):
+        """Reset user DSP back to clean studio default."""
+        try:
+            async with self.session_factory() as session:
+                async with session.begin():
+                    query = select(UserDSPSettings).where(UserDSPSettings.user_id == user_id)
+                    result = await session.execute(query)
+                    row = result.scalars().first()
+                    if row:
+                        await session.delete(row)
+        except Exception as e:
+            print(f"[DB] clear_user_dsp error: {e}")
 
 
 db_service = DatabaseService()

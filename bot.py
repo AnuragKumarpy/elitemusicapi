@@ -678,12 +678,15 @@ async def handle_play(message: Message):
                 invite_link=invite_link
             )
         else:
+            user_dsp_dict = await db_service.get_user_dsp(user_id)
+            track_dsp = DSPConfig(**user_dsp_dict) if user_dsp_dict else None
             result = await music_client.play(
                 chat_id=message.chat.id,
                 query=query,
                 requested_by_id=user_id,
                 requested_by_name=user_name,
-                invite_link=invite_link
+                invite_link=invite_link,
+                dsp=track_dsp
             )
 
         badge = f"{E_MUSIC} <b>NOW STREAMING:</b>" if result.status == "STREAMING" else "⏳ <b>ADDED TO QUEUE:</b>"
@@ -1144,3 +1147,155 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+
+
+@dp.message(F.text.regexp(r"^[!/.?]?(?:setdsp)(?:@\w+)?(?:\s+(.*))?", flags=re.IGNORECASE))
+async def handle_setdsp_cmd(message: Message):
+    user_id = message.from_user.id if message.from_user else 0
+    text = (message.text or "").strip()
+    parts = text.split()
+
+    if len(parts) < 3:
+        usage = (
+            f"🎛️ <b>Personal DSP Configuration Guide</b>\n\n"
+            f"Configure your personal sound profile. All songs you queue will automatically be rendered with your custom DSP ahead of time!\n\n"
+            f"• <code>/setdsp bass &lt;0-15&gt;</code> — Set Bass Boost dB (e.g. <code>/setdsp bass 10</code>)\n"
+            f"• <code>/setdsp 8d &lt;on|off&gt;</code> — Enable 360° Circular Spatial Audio\n"
+            f"• <code>/setdsp nightcore &lt;on|off&gt;</code> — Enable 1.25x High-Tempo Nightcore\n"
+            f"• <code>/setdsp speed &lt;0.5-2.0&gt;</code> — Set playback speed (e.g. <code>/setdsp speed 1.2</code>)\n"
+            f"• <code>/mydsp</code> — View your current active DSP profile\n"
+            f"• <code>/cleardsp</code> — Reset to clean studio sound\n\n"
+            f"{POWERED_BY_FOOTER}"
+        )
+        msg = await message.reply(usage, parse_mode="HTML")
+        asyncio.create_task(auto_delete(msg, delay=15))
+        return
+
+    mode = parts[1].lower()
+    val = parts[2].lower()
+
+    if mode == "bass":
+        try:
+            db_val = max(0.0, min(15.0, float(val)))
+            await db_service.set_user_dsp(user_id, bass_boost_db=db_val)
+            res = f"🔊 <b>Bass Boost set to +{db_val:.1f} dB</b> for your queued songs!"
+        except Exception:
+            res = "⚠️ Invalid bass value. Choose between 0 and 15 dB."
+    elif mode in ("8d", "d8", "spatial"):
+        is_on = val in ("on", "1", "true", "enable")
+        await db_service.set_user_dsp(user_id, spatial_8d=is_on)
+        res = f"🎧 <b>8D Spatial Audio {'ENABLED' if is_on else 'DISABLED'}</b> for your queued songs!"
+    elif mode in ("nightcore", "nc"):
+        is_on = val in ("on", "1", "true", "enable")
+        await db_service.set_user_dsp(user_id, nightcore=is_on)
+        res = f"⚡ <b>Nightcore Mode {'ENABLED' if is_on else 'DISABLED'}</b> for your queued songs!"
+    elif mode == "speed":
+        try:
+            spd_val = max(0.5, min(2.0, float(val)))
+            await db_service.set_user_dsp(user_id, speed=spd_val)
+            res = f"⏱️ <b>Playback Speed set to {spd_val:.2f}x</b> for your queued songs!"
+        except Exception:
+            res = "⚠️ Invalid speed value. Choose between 0.5 and 2.0x."
+    else:
+        res = f"⚠️ Unknown DSP parameter: <code>{html.escape(mode)}</code>. Use <code>bass</code>, <code>8d</code>, <code>nightcore</code>, or <code>speed</code>."
+
+    msg = await message.reply(f"{res}\n\n{POWERED_BY_FOOTER}", parse_mode="HTML")
+    asyncio.create_task(auto_delete(msg, delay=10))
+
+
+@dp.message(F.text.regexp(r"^[!/.?]?(?:mydsp|dsp)(?:@\w+)?", flags=re.IGNORECASE))
+async def handle_mydsp_cmd(message: Message):
+    user_id = message.from_user.id if message.from_user else 0
+    dsp = await db_service.get_user_dsp(user_id)
+
+    if not dsp or (dsp.get('bass_boost_db', 0) == 0 and not dsp.get('spatial_8d') and not dsp.get('nightcore') and dsp.get('speed', 1.0) == 1.0):
+        text = (
+            f"🎛️ <b>Your Personal DSP Profile:</b> <code>CLEAN STUDIO (DEFAULT)</code>\n\n"
+            f"No sound modifiers active. Your queued songs play with pure uncompressed studio audio.\n"
+            f"Use <code>/setdsp bass 10</code> or <code>/8d on</code> to activate modifiers.\n\n"
+            f"{POWERED_BY_FOOTER}"
+        )
+    else:
+        text = (
+            f"🎛️ <b>Your Active DSP Sound Profile:</b>\n\n"
+            f"• 🔊 <b>Bass Boost:</b> <code>+{dsp.get('bass_boost_db', 0):.1f} dB</code>\n"
+            f"• 🎧 <b>8D Spatial Audio:</b> <code>{'ON (360°)' if dsp.get('spatial_8d') else 'OFF'}</code>\n"
+            f"• ⚡ <b>Nightcore:</b> <code>{'ON (1.25x)' if dsp.get('nightcore') else 'OFF'}</code>\n"
+            f"• ⏱️ <b>Playback Speed:</b> <code>{dsp.get('speed', 1.0):.2f}x</code>\n\n"
+            f"⚡ <i>These modifiers are automatically pre-rendered on every song you queue!</i>\n"
+            f"Use <code>/cleardsp</code> to reset.\n\n"
+            f"{POWERED_BY_FOOTER}"
+        )
+
+    msg = await message.reply(text, parse_mode="HTML")
+    asyncio.create_task(auto_delete(msg, delay=15))
+
+
+@dp.message(F.text.regexp(r"^[!/.?]?(?:cleardsp|resetdsp)(?:@\w+)?", flags=re.IGNORECASE))
+async def handle_cleardsp_cmd(message: Message):
+    user_id = message.from_user.id if message.from_user else 0
+    await db_service.clear_user_dsp(user_id)
+    msg = await message.reply(f"{E_CHECK} <b>Personal DSP reset to Clean Studio Audio!</b>\n\n{POWERED_BY_FOOTER}", parse_mode="HTML")
+    asyncio.create_task(auto_delete(msg, delay=8))
+
+
+@dp.message(F.text.regexp(r"^[!/.?]?(?:bass)(?:@\w+)?(?:\s+(.*))?", flags=re.IGNORECASE))
+async def handle_bass_cmd(message: Message):
+    user_id = message.from_user.id if message.from_user else 0
+    parts = (message.text or "").split()
+    if len(parts) > 1 and parts[1].lower() in ("off", "0", "disable", "reset"):
+        db = 0.0
+    elif len(parts) > 1 and parts[1].replace(".", "", 1).isdigit():
+        db = max(0.0, min(15.0, float(parts[1])))
+    else:
+        cur_dsp = await db_service.get_user_dsp(user_id) or {}
+        cur_db = cur_dsp.get("bass_boost_db", 0.0)
+        db = 0.0 if cur_db > 0 else 10.0
+
+    await db_service.set_user_dsp(user_id, bass_boost_db=db)
+    if db > 0:
+        msg = await message.reply(f"{E_FIRE} <b>Bass Boost (+{db:.1f} dB) armed for your queued songs!</b>\n⚡ <i>Pre-rendered in background for gapless playback.</i>\n\n{POWERED_BY_FOOTER}", parse_mode="HTML")
+    else:
+        msg = await message.reply(f"{E_CHECK} <b>Bass Boost disabled.</b> Your queued songs will play flat studio audio.\n\n{POWERED_BY_FOOTER}", parse_mode="HTML")
+    asyncio.create_task(auto_delete(msg, delay=8))
+
+
+@dp.message(F.text.regexp(r"^[!/.?]?(?:8d|d8)(?:@\w+)?(?:\s+(.*))?", flags=re.IGNORECASE))
+async def handle_8d_cmd(message: Message):
+    user_id = message.from_user.id if message.from_user else 0
+    parts = (message.text or "").split()
+    if len(parts) > 1 and parts[1].lower() in ("off", "0", "disable", "reset"):
+        is_on = False
+    elif len(parts) > 1 and parts[1].lower() in ("on", "1", "enable"):
+        is_on = True
+    else:
+        cur_dsp = await db_service.get_user_dsp(user_id) or {}
+        is_on = not cur_dsp.get("spatial_8d", False)
+
+    await db_service.set_user_dsp(user_id, spatial_8d=is_on)
+    if is_on:
+        msg = await message.reply(f"{E_HEADPHONES} <b>8D Spatial Audio armed for your queued songs!</b>\n⚡ <i>360° binaural circular panning pre-rendered.</i>\n\n{POWERED_BY_FOOTER}", parse_mode="HTML")
+    else:
+        msg = await message.reply(f"{E_CHECK} <b>8D Spatial Audio disabled.</b>\n\n{POWERED_BY_FOOTER}", parse_mode="HTML")
+    asyncio.create_task(auto_delete(msg, delay=8))
+
+
+@dp.message(F.text.regexp(r"^[!/.?]?(?:nightcore|nc)(?:@\w+)?(?:\s+(.*))?", flags=re.IGNORECASE))
+async def handle_nightcore_cmd(message: Message):
+    user_id = message.from_user.id if message.from_user else 0
+    parts = (message.text or "").split()
+    if len(parts) > 1 and parts[1].lower() in ("off", "0", "disable", "reset"):
+        is_on = False
+    elif len(parts) > 1 and parts[1].lower() in ("on", "1", "enable"):
+        is_on = True
+    else:
+        cur_dsp = await db_service.get_user_dsp(user_id) or {}
+        is_on = not cur_dsp.get("nightcore", False)
+
+    await db_service.set_user_dsp(user_id, nightcore=is_on)
+    if is_on:
+        msg = await message.reply(f"⚡ <b>Nightcore Mode (1.25x Tempo & Pitch) armed for your queued songs!</b>\n\n{POWERED_BY_FOOTER}", parse_mode="HTML")
+    else:
+        msg = await message.reply(f"{E_CHECK} <b>Nightcore Mode disabled.</b>\n\n{POWERED_BY_FOOTER}", parse_mode="HTML")
+    asyncio.create_task(auto_delete(msg, delay=8))

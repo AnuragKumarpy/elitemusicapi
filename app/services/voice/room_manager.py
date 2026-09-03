@@ -59,7 +59,7 @@ class VoiceRoom:
                     room_id=self.chat_id,
                     assistant=self.assistant,
                     track=track,
-                    dsp=self.dsp
+                    dsp=(track.dsp or dsp_override or self.dsp)
                 )
                 await self.active_session.start_streaming()
                 self._schedule_duration_watcher(track.duration_seconds)
@@ -136,7 +136,7 @@ class VoiceRoom:
                     room_id=self.chat_id,
                     assistant=self.assistant,
                     track=next_track,
-                    dsp=self.dsp
+                    dsp=(next_track.dsp or self.dsp)
                 )
                 await self.active_session.start_streaming()
                 self._schedule_duration_watcher(next_track.duration_seconds)
