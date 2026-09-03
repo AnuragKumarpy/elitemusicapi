@@ -178,8 +178,8 @@ class VoiceRoom:
         if self.active_session:
             await self.active_session.seek(position_ms)
 
-    def update_dsp(self, dsp_req: DSPUpdateRequest) -> DSPConfig:
-        """Update persistent room DSP for upcoming and queued tracks."""
+    async def update_dsp(self, dsp_req: DSPUpdateRequest) -> DSPConfig:
+        """Update persistent room DSP and apply immediately to live voice chat session."""
         if dsp_req.bass_boost_db is not None:
             self.dsp.bass_boost_db = dsp_req.bass_boost_db
         if dsp_req.spatial_8d is not None:
@@ -190,6 +190,9 @@ class VoiceRoom:
             self.dsp.volume = dsp_req.volume
         if dsp_req.nightcore is not None:
             self.dsp.nightcore = dsp_req.nightcore
+
+        if self.active_session:
+            await self.active_session.update_dsp(self.dsp)
         return self.dsp
 
     def get_state(self) -> RoomStateResponse:
@@ -230,7 +233,7 @@ class RoomManager:
 
     async def update_dsp(self, chat_id: int, req: DSPUpdateRequest) -> DSPConfig:
         room = await self.get_or_create_room(chat_id)
-        return room.update_dsp(req)
+        return await room.update_dsp(req)
 
     async def pause(self, chat_id: int):
         room = await self.get_or_create_room(chat_id)

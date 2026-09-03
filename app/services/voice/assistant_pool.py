@@ -173,13 +173,7 @@ class AssistantAccount:
                 ffmpeg_parameters=ffmpeg_params
             )
 
-        # Leave previous call to force clean WebRTC SDP negotiation (Audio <-> Video)
-        try:
-            if chat_id in self.active_vcs:
-                await self.call_app.leave_call(chat_id)
-                await asyncio.sleep(0.3)
-        except Exception:
-            pass
+        # Smooth in-call stream switch (no disconnect/rejoin jitter)
 
         await self.call_app.play(chat_id, media_stream)
         self.active_vcs.add(chat_id)
