@@ -101,6 +101,7 @@ class TrackInfo(BaseModel):
     position_in_queue: Optional[int] = None
     requested_by: Optional[RequestedByInfo] = None
     dsp: Optional[DSPConfig] = None
+    proxy: Optional[str] = None
     invite_link: Optional[str] = None
 
 
