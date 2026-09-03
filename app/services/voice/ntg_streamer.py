@@ -86,8 +86,11 @@ class VoiceStreamSession:
         return min(int(elapsed_sec * 1000), self.track.duration_seconds * 1000)
 
     async def update_dsp(self, new_dsp: DSPConfig):
-        """Update DSP profile for session."""
+        """Update DSP profile for session and apply immediately to live voice chat."""
         self.dsp = new_dsp
+        if self.is_running and not self.is_paused:
+            self.seek_ms = self.current_progress_ms
+            await self.start_streaming()
 
     async def seek(self, target_ms: int):
         self.seek_ms = target_ms
