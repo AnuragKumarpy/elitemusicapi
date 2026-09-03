@@ -100,6 +100,7 @@ class TrackInfo(BaseModel):
     source: str
     position_in_queue: Optional[int] = None
     requested_by: Optional[RequestedByInfo] = None
+    dsp: Optional[DSPConfig] = None
     invite_link: Optional[str] = None
 
 
