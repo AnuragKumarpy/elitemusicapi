@@ -168,6 +168,7 @@ class AssistantAccount:
         else:
             media_stream = MediaStream(
                 media_path=media_url,
+                audio_path=media_url,
                 audio_parameters=AudioQuality.HIGH,
                 video_flags=MediaStream.Flags.IGNORE,
                 ffmpeg_parameters=ffmpeg_params
