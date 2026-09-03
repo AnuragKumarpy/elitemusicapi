@@ -40,20 +40,20 @@ class VoiceStreamSession:
         media_url = self.track.stream_url or ""
         is_video = (self.track.media_type == "video")
         
-        # Build clean FFmpeg parameters with proxy tunneling & DSP filters
+        # Build clean PyTgCalls FFmpeg parameters (---start for input flags, ---mid for filter flags)
         proxy_str = self.track.proxy or "http://nioqtqce:89o0hbtuubix@45.38.107.97:6014"
-        proxy_flags = f"-http_proxy {proxy_str} -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"
-        
-        filter_flags = ""
-        if not is_video and self.dsp and (self.dsp.bass_boost_db != 0 or self.dsp.spatial_8d or self.dsp.speed != 1.0 or self.dsp.volume != 100 or self.dsp.nightcore):
-            audio_filter = DSPFilterBuilder.build_audio_filtergraph(self.dsp)
-            filter_flags = f"-af {audio_filter}"
+        start_flags = f"-http_proxy {proxy_str}"
+        mid_flags = ""
 
         if self.seek_ms > 0:
             seek_sec = int(self.seek_ms / 1000)
-            filter_flags = f"-ss {seek_sec} {filter_flags}".strip()
+            start_flags += f" -ss {seek_sec}"
 
-        ffmpeg_params = f"{proxy_flags} {filter_flags}".strip() if filter_flags else proxy_flags
+        if not is_video and self.dsp and (self.dsp.bass_boost_db != 0 or self.dsp.spatial_8d or self.dsp.speed != 1.0 or self.dsp.volume != 100 or self.dsp.nightcore):
+            audio_filter = DSPFilterBuilder.build_audio_filtergraph(self.dsp)
+            mid_flags = f"-af {audio_filter}"
+
+        ffmpeg_params = f"---start {start_flags} ---mid {mid_flags}".strip() if mid_flags else f"---start {start_flags}".strip()
 
         audio_url = self.track.audio_stream_url or (media_url if is_video else None)
         
