@@ -22,6 +22,21 @@ logger = logging.getLogger("elitemusic.resolver")
 # Singleton YTMusic client for instant search
 yt_music = YTMusic()
 
+PROXIES = [
+    "http://nioqtqce:89o0hbtuubix@45.38.107.97:6014",
+    "http://nioqtqce:89o0hbtuubix@84.247.60.125:6095",
+    "http://nioqtqce:89o0hbtuubix@31.59.20.176:6754",
+    "http://nioqtqce:89o0hbtuubix@198.105.121.200:6462",
+    "http://nioqtqce:89o0hbtuubix@64.137.96.74:6641",
+    "http://nioqtqce:89o0hbtuubix@198.23.243.226:6361",
+    "http://nioqtqce:89o0hbtuubix@38.154.185.97:6370",
+    "http://nioqtqce:89o0hbtuubix@142.111.67.146:5611",
+    "http://nioqtqce:89o0hbtuubix@191.96.254.138:6185",
+    "http://nioqtqce:89o0hbtuubix@31.58.9.4:6077"
+]
+_proxy_index = 0
+
+
 
 class MediaResolver:
     SPOTIFY_TRACK_REGEX = re.compile(
@@ -54,51 +69,59 @@ class MediaResolver:
         cls, video_url: str, is_video: bool = False
     ) -> Optional[Dict[str, Any]]:
         """
-        Runs yt-dlp asynchronously with cookies and Deno JS engine to get direct stream URL.
+        Runs yt-dlp asynchronously with Webshare rotating proxies and Deno JS engine.
         """
+        global _proxy_index
         ytdlp_bin = shutil.which("yt-dlp") or "/home/ubuntu/elitemusicapi/venv/bin/yt-dlp" or "yt-dlp"
         cookie_file = cls._get_cookie_file()
         deno_bin = cls._get_deno_binary()
 
-        cmd = [
-            ytdlp_bin,
-            "--no-playlist",
-            "--dump-json",
-            "--skip-download",
-            "--quiet",
-            "--no-warnings",
-        ]
+        # Try up to 3 rotating proxies if needed
+        for attempt in range(min(3, len(PROXIES))):
+            current_proxy = PROXIES[_proxy_index % len(PROXIES)]
+            _proxy_index += 1
 
-        if cookie_file:
-            cmd.extend(["--cookies", cookie_file])
+            cmd = [
+                ytdlp_bin,
+                "--no-playlist",
+                "--dump-json",
+                "--skip-download",
+                "--quiet",
+                "--no-warnings",
+                "--proxy", current_proxy,
+            ]
 
-        if deno_bin and os.path.exists(deno_bin):
-            cmd.extend(["--js-runtimes", f"deno:{deno_bin}"])
+            if cookie_file and os.path.exists(cookie_file):
+                cmd.extend(["--cookies", cookie_file])
 
-        if is_video:
-            cmd.extend(["-f", "bestvideo[height<=720]+bestaudio/best[height<=720]/best"])
-        else:
-            cmd.extend(["-f", "bestaudio/best"])
+            if deno_bin and os.path.exists(deno_bin):
+                cmd.extend(["--js-runtimes", f"deno:{deno_bin}"])
 
-        cmd.append(video_url)
-
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=12.0)
-
-            if proc.returncode == 0 and stdout:
-                data = json.loads(stdout.decode().strip())
-                return data
+            if is_video:
+                cmd.extend(["-f", "bestvideo[height<=720]+bestaudio/best[height<=720]/best"])
             else:
-                logger.warning(f"yt-dlp returned code {proc.returncode}: {stderr.decode()[:200]}")
-                return None
-        except Exception as e:
-            logger.error(f"yt-dlp extraction failed for {video_url}: {e}")
-            return None
+                cmd.extend(["-f", "bestaudio/best"])
+
+            cmd.append(video_url)
+
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=12.0)
+
+                if proc.returncode == 0 and stdout:
+                    data = json.loads(stdout.decode().strip())
+                    return data
+                else:
+                    err_msg = stderr.decode()[:200]
+                    logger.warning(f"yt-dlp proxy {current_proxy.split('@')[-1]} attempt {attempt+1} failed: {err_msg}")
+            except Exception as e:
+                logger.warning(f"yt-dlp proxy {current_proxy.split('@')[-1]} attempt {attempt+1} error: {e}")
+
+        return None
 
     @classmethod
     async def resolve(
