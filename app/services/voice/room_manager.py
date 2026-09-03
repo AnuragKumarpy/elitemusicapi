@@ -87,14 +87,20 @@ class VoiceRoom:
         """Pre-extract upcoming queued tracks in the background for 0ms gapless playback."""
         try:
             from app.services.extractor.resolver import media_resolver
-            for track in list(self.queue)[:2]:  # Pre-cache next 2 tracks
+            for track in list(self.queue)[:2]:
                 if not track.stream_url or 'youtube.com' in track.stream_url:
-                    vid_url = f'https://www.youtube.com/watch?v={track.video_id}' if track.video_id else (track.url or '')
-                    if vid_url:
-                        direct_url = await media_resolver._extract_ytdlp_stream(vid_url)
-                        if direct_url:
-                            track.stream_url = direct_url
-                            track.audio_stream_url = direct_url
+                    vid_url = f'https://www.youtube.com/watch?v={track.id}' if not track.stream_url else track.stream_url
+                    res_info = await media_resolver._extract_ytdlp_stream(vid_url)
+                    if res_info:
+                        d_url = res_info.get("url")
+                        if not d_url and res_info.get("formats"):
+                            af = [f for f in res_info.get("formats", []) if f.get("acodec") != "none"]
+                            if af:
+                                d_url = af[-1].get("url")
+                        if d_url:
+                            track.stream_url = d_url
+                            track.audio_stream_url = d_url
+                            track.proxy = res_info.get("_used_proxy")
                             print(f'[VoiceRoom] ⚡ Pre-cached background stream for: {track.title}')
         except Exception as e:
             print(f'[VoiceRoom] Pre-fetch background task notice: {e}')

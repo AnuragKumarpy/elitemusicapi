@@ -114,6 +114,7 @@ class MediaResolver:
 
                 if proc.returncode == 0 and stdout:
                     data = json.loads(stdout.decode().strip())
+                    data["_used_proxy"] = current_proxy
                     return data
                 else:
                     err_msg = stderr.decode()[:200]
@@ -233,6 +234,7 @@ class MediaResolver:
 
         track_id = f"trk_{uuid.uuid4().hex[:10]}"
 
+        used_proxy = extracted_info.get("_used_proxy") if extracted_info else PROXIES[0]
         return TrackInfo(
             id=track_id,
             title=title,
@@ -243,6 +245,7 @@ class MediaResolver:
             media_type="video" if is_video else "audio",
             source="youtube_music",
             requested_by=requested_by,
+            proxy=used_proxy,
         )
 
 media_resolver = MediaResolver()
